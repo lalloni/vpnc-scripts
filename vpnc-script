@@ -121,6 +121,9 @@ if [ -r /etc/openwrt_release ] && [ -n "$OPENWRT_INTERFACE" ]; then
 	include /lib/network
 	MODIFYRESOLVCONF=modify_resolvconf_openwrt
 	RESTORERESOLVCONF=restore_resolvconf_openwrt
+elif [ -x /usr/sbin/dnsmasq ]; then # dnsmasq is installed, so use it
+	MODIFYRESOLVCONF=modify_dnsmasq
+	RESTORERESOLVCONF=restore_dnsmasq
 elif [ -x /usr/bin/busctl ]; then  # For systemd-resolved (version 229 and above)
 	MODIFYRESOLVCONF=modify_resolved_manager
 	RESTORERESOLVCONF=restore_resolved_manager
@@ -560,6 +563,29 @@ modify_resolvconf_openwrt() {
 restore_resolvconf_openwrt() {
 	remove_dns $OPENWRT_INTERFACE
 }
+
+# === dns handling via dnsmasq (where installed) =========
+
+modify_dnsmasq() {
+	NEW_CONFIG=""
+	for i in $INTERNAL_IP4_DNS; do
+		if [ -n "$CISCO_DEF_DOMAIN" ]; then
+			for d in $CISCO_DEF_DOMAIN; do
+				NEW_CONFIG="${NEW_CONFIG}server=/$d/$i\n"
+			done
+		else
+			NEW_CONFIG="${NEW_CONFIG}server=$i\n"
+		fi
+	done
+	echo "$NEW_CONFIG" > /etc/dnsmasq.d/vpnc-generated.conf
+	/etc/init.d/dnsmasq restart
+}
+
+restore_dnsmasq() {
+	rm /etc/dnsmasq.d/vpnc-generated.conf
+	/etc/init.d/dnsmasq restart
+}
+
 # === resolv.conf handling via /sbin/resolvconf (Debian, Ubuntu, Gentoo)) =========
 
 modify_resolvconf_manager() {
